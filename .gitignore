@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+.env
+.env.*
+
+# Build/packaging
+build/
+dist/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE/Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Node (if any web assets built)
+node_modules/
+
+# Project data/secrets (keep tracked files explicit)
+# Uncomment to keep local-only accounts during dev. If you do, ensure sample files are committed.
+# data/accounts.json
+# data/*.secret.json
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+
+# Environments
+venv/
+.env
+.env.*
+
+# OS / Editors
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Logs & Temp
+*.log
+*.tmp
+*.swp

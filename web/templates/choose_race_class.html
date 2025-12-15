@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Choose Race & Class - Cyberdelia EX</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: url('/static/cyberpunk_city.jpg') center center/cover, linear-gradient(135deg, #0f2027 0%, #2c5364 100%);
+            color: #caff70;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .choose-box {
+            background: rgba(20, 30, 20, 0.92);
+            padding: 36px 32px 28px 32px;
+            border-radius: 14px;
+            box-shadow: 0 0 32px #00ff99cc, 0 0 8px #00ff9944;
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid #00ff99;
+        }
+        h2 {
+            color: #00ff99;
+            margin-bottom: 18px;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+        }
+        label {
+            margin-top: 12px;
+            font-size: 1.1rem;
+        }
+        select, button {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0 18px 0;
+            background: #101c10;
+            color: #caff70;
+            border: 1.5px solid #00ff99;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-shadow: 0 0 8px #00ff9944 inset;
+        }
+        button {
+            background: linear-gradient(90deg, #00ff99 0%, #caff70 100%);
+            color: #222;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+            box-shadow: 0 2px 12px #00ff9944;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: linear-gradient(90deg, #caff70 0%, #00ff99 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="choose-box">
+        <h2>Choose Your Race & Class</h2>
+        <form method="POST">
+            <label for="char_name">Character Name:</label>
+            <input type="text" name="char_name" id="char_name" maxlength="24" required placeholder="Enter character name..." style="width:80%;padding:10px;margin:10px 0 18px 0;background:#101c10;color:#caff70;border:1.5px solid #00ff99;border-radius:8px;font-size:1rem;box-shadow:0 0 8px #00ff9944 inset;">
+            <label for="race">Race:</label>
+            <select name="race" id="race" required>
+                <option value="">-- Select Race --</option>
+                {% for race, rdata in races.items() %}
+                <option value="{{ race }}">{{ race }} - {{ rdata.description }}</option>
+                {% endfor %}
+            </select>
+            <label for="char_class">Class:</label>
+            <select name="char_class" id="char_class" required>
+                <option value="">-- Select Class --</option>
+                {% for cname, cdata in classes.items() %}
+                <option value="{{ cname }}">{{ cname }} - {{ cdata.description }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Confirm</button>
+        </form>
+    </div>
+</body>
+</html>

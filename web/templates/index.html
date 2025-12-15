@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUD Web UI</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+                /* Shake and red glow animation for player hit */
+                .hit-effect {
+                    animation: shake 1.2s cubic-bezier(.36,.07,.19,.97) both, glow-red 1.2s linear both;
+                }
+                @keyframes shake {
+                    10%, 90% { transform: translate3d(-6px, 0, 0); }
+                    20%, 80% { transform: translate3d(12px, 0, 0); }
+                    30%, 50%, 70% { transform: translate3d(-24px, 0, 0); }
+                    40%, 60% { transform: translate3d(24px, 0, 0); }
+                }
+                @keyframes glow-red {
+                    0% { box-shadow: 0 0 0px #ff0033; }
+                    30% { box-shadow: 0 0 64px 16px #ff0033, 0 0 24px 8px #ff0033; }
+                    70% { box-shadow: 0 0 64px 16px #ff0033, 0 0 24px 8px #ff0033; }
+                    100% { box-shadow: 0 0 0px #ff0033; }
+                }
+                /* Subtle crit shake and gold glow */
+                .crit-effect {
+                    animation: crit-shake 0.7s cubic-bezier(.36,.07,.19,.97) both, glow-gold 0.7s linear both;
+                }
+                @keyframes crit-shake {
+                    10%, 90% { transform: translate3d(-3px, 0, 0); }
+                    20%, 80% { transform: translate3d(6px, 0, 0); }
+                    30%, 50%, 70% { transform: translate3d(-10px, 0, 0); }
+                    40%, 60% { transform: translate3d(10px, 0, 0); }
+                }
+                @keyframes glow-gold {
+                    0% { box-shadow: 0 0 0px #ffe600; }
+                    30% { box-shadow: 0 0 28px 8px #ffe600, 0 0 12px 4px #ffe600; }
+                    70% { box-shadow: 0 0 28px 8px #ffe600, 0 0 12px 4px #ffe600; }
+                    100% { box-shadow: 0 0 0px #ffe600; }
+                }
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: url('/static/cyberpunk_city.jpg') center center/cover, linear-gradient(135deg, #0f2027 0%, #2c5364 100%);
+            color: #caff70;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        h2 {
+            color: #00ff99;
+            text-shadow: 0 0 8px #00ff9988, 0 0 2px #222;
+            margin-top: 80px;
+            margin-bottom: 24px;
+            font-size: 2rem;
+            letter-spacing: 2px;
+        }
+        .main-container, #main-container {
+            width: 100vw;
+            max-width: 100vw;
+            height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: stretch;
+            width: 100%;
+            max-width: 1400px;
+        }
+        @media (max-width: 900px) {
+            .main-container {
+                flex-direction: row;
+                align-items: flex-start;
+                max-width: 100vw;
+            }
+            .sidebar {
+                margin-left: 12px;
+                margin-top: 0;
+                min-width: 160px;
+                max-width: 200px;
+                width: 30vw;
+            }
+            .game-area {
+                width: 65vw;
+                max-width: 100vw;
+            }
+            #output, #input {
+                max-width: 100vw;
+                width: 100%;
+            }
+        }
+        @media (max-width: 600px) {
+            h2 {
+                font-size: 1.2rem;
+                margin-top: 40px;
+                margin-bottom: 12px;
+            }
+            .main-container {
+                flex-direction: column;
+                padding: 0;
+            }
+            .sidebar, .game-area {
+                padding: 8px;
+            }
+            #output, #input {
+                font-size: 0.95rem;
+                padding: 8px;
+            }
+        }
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            min-width: 0;
+            height: 100%;
+        }
+        #output {
+            width: 100%;
+            color: #caff70;
+            overflow-y: auto;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 0 24px #00ff99cc, 0 0 8px #00ff9944;
+            border: 2px solid #00ff99;
+            margin-bottom: 18px;
+            height: 320px;
+            max-height: 320px;
+        }
+        #input {
+            width: 100%;
+            max-width: 600px;
+            padding: 12px;
+            background: #101c10cc;
+            color: #caff70;
+            border: 1.5px solid #00ff99;
+            border-radius: 8px;
+            font-size: 1.08rem;
+            margin-bottom: 24px;
+            box-shadow: 0 0 8px #00ff9944 inset;
+        }
+        #input:focus {
+            border: 2px solid #caff70;
+            outline: none;
+            box-shadow: 0 0 12px #00ff99cc;
+        }
+        .sidebar {
+            flex: none;
+            width: 600px;
+            margin-left: 64px;
+            background: rgba(20, 30, 20, 0.92);
+            border: 2px solid #00ff99;
+            border-radius: 14px;
+            box-shadow: 0 0 16px #00ff99cc, 0 0 4px #00ff9944;
+            padding: 6px 6px 6px 6px;
+            min-width: 0;
+            color: #caff70;
+            height: 320px;
+            max-height: 320px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .sidebar h3 {
+            color: #00ff99;
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            text-shadow: 0 0 6px #00ff9988;
+        }
+        .xp-bar {
+            width: 100%;
+            background: #222;
+            border-radius: 8px;
+            margin: 6px 0 10px 0;
+            border: 1.5px solid #00ff99;
+            height: 14px;
+            position: relative;
+        }
+        .xp-bar-inner {
+            background: linear-gradient(90deg, #00ff99 0%, #caff70 100%);
+            height: 100%;
+            border-radius: 8px;
+            width: 40%; /* Placeholder, update with JS */
+            box-shadow: 0 0 8px #00ff99cc;
+            transition: width 0.3s;
+        }
+        .xp-label {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            color: #222;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-shadow: 0 0 4px #caff70cc;
+        }
+        .inventory {
+            width: 100%;
+            margin-top: 18px;
+        }
+        .inventory ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .inventory li {
+            background: #101c10;
+            border: 1px solid #00ff99;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            padding: 4px 8px;
+            color: #caff70;
+            font-size: 0.85rem;
+            box-shadow: 0 0 4px #00ff9944;
+        }
+
+        /* More vibrant pulse animations per color */
+        @keyframes pulseGreen {
+            0%   { box-shadow: 0 0 8px rgba(0,255,153,0.5); filter: saturate(1); }
+            40%  { box-shadow: 0 0 26px rgba(0,255,153,1), 0 0 12px rgba(0,255,153,0.9); filter: saturate(1.3) brightness(1.1); }
+            100% { box-shadow: 0 0 8px rgba(0,255,153,0.5); filter: saturate(1); }
+        }
+        @keyframes pulseYellow {
+            0%   { box-shadow: 0 0 8px rgba(202,255,112,0.5); filter: saturate(1); }
+            40%  { box-shadow: 0 0 26px rgba(202,255,112,1), 0 0 12px rgba(202,255,112,0.9); filter: saturate(1.3) brightness(1.1); }
+            100% { box-shadow: 0 0 8px rgba(202,255,112,0.5); filter: saturate(1); }
+        }
+        @keyframes pulseRed {
+            0%   { box-shadow: 0 0 8px rgba(255,0,51,0.5); filter: saturate(1); }
+            40%  { box-shadow: 0 0 26px rgba(255,0,51,1), 0 0 12px rgba(255,0,51,0.9); filter: saturate(1.3) brightness(1.1); }
+            100% { box-shadow: 0 0 8px rgba(255,0,51,0.5); filter: saturate(1); }
+        }
+        .pulse-green { animation: pulseGreen 800ms ease-in-out 1; }
+        .pulse-yellow { animation: pulseYellow 800ms ease-in-out 1; }
+        .pulse-red { animation: pulseRed 800ms ease-in-out 1; }
+        /* Bright heal glow for health bar */
+        @keyframes healGlow {
+            0%   { box-shadow: 0 0 12px rgba(0,255,153,0.6); filter: brightness(1.05); }
+            30%  { box-shadow: 0 0 36px rgba(0,255,153,1), 0 0 16px rgba(0,255,153,0.95); filter: brightness(1.2) saturate(1.2); }
+            100% { box-shadow: 0 0 12px rgba(0,255,153,0.6); filter: brightness(1.05); }
+        }
+        .heal-effect { animation: healGlow 1200ms ease-in-out 1; }
+        /* Bright endurance glow (yellow) */
+        @keyframes endGlow {
+            0%   { box-shadow: 0 0 12px rgba(255,230,0,0.6); filter: brightness(1.05); }
+            30%  { box-shadow: 0 0 36px rgba(255,230,0,1), 0 0 16px rgba(255,230,0,0.95); filter: brightness(1.2) saturate(1.2); }
+            100% { box-shadow: 0 0 12px rgba(255,230,0,0.6); filter: brightness(1.05); }
+        }
+        .end-heal-effect { animation: endGlow 1200ms ease-in-out 1; }
+        /* Willpower heal glow (blue) */
+        @keyframes willGlow {
+            0%   { box-shadow: 0 0 12px rgba(0, 153, 255, 0.6); filter: brightness(1.05); }
+            30%  { box-shadow: 0 0 36px rgba(0, 153, 255, 1), 0 0 16px rgba(0, 153, 255, 0.95); filter: brightness(1.2) saturate(1.2); }
+            100% { box-shadow: 0 0 12px rgba(0, 153, 255, 0.6); filter: brightness(1.05); }
+        }
+        .will-heal-effect { animation: willGlow 1200ms ease-in-out 1; }
+        /* Pulsing neon effect for the player's map X marker */
+        @keyframes pulseXStroke {
+            0%   { stroke: #00ff99; stroke-width: 3.5; filter: drop-shadow(0 0 2px #00ff99); }
+            50%  { stroke: #caff70; stroke-width: 5; filter: drop-shadow(0 0 6px #caff70); }
+            100% { stroke: #00ff99; stroke-width: 3.5; filter: drop-shadow(0 0 2px #00ff99); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;"></canvas>
+    <!-- Top-left Logout Button -->
+    <form action="/logout" method="get" style="position:fixed;top:16px;left:16px;z-index:200;">
+        <button type="submit" style="background:linear-gradient(90deg,#00ff99 0%,#caff70 100%);color:#222;font-weight:700;padding:8px 14px;border-radius:8px;border:none;box-shadow:0 2px 8px #00ff9944;cursor:pointer;font-size:0.95rem;">Logout</button>
+    </form>
+    <!-- Centered Title -->
+    <h2 style="text-align:center;width:100vw;position:absolute;top:24px;left:0;margin:0 auto;z-index:10;">Cyberdelia EX</h2>
+    <!-- Background Music (looping) -->
+    <audio id="bg-music" src="/static/club-night-groove.mp3" loop preload="auto"></audio>
+    <div style="position:fixed;top:16px;right:16px;z-index:200;display:flex;gap:6px;align-items:center;background:rgba(20,30,20,0.8);padding:6px 8px;border:1px solid #00ff99;border-radius:8px;box-shadow:0 0 10px #00ff9944;max-width:420px;">
+        <button id="music-toggle" style="background:#00ff99;color:#222;font-weight:700;padding:6px 10px;border-radius:6px;border:none;box-shadow:0 2px 8px #00ff9944;cursor:pointer;font-size:0.9rem;white-space:nowrap;">Play</button>
+        <select id="music-track" style="background:#101c10;color:#caff70;border:1px solid #00ff99;border-radius:6px;padding:4px 6px;font-size:0.88rem;max-width:160px;">
+            <option value="/static/club-night-groove.mp3">Club Night Groove</option>
+            <option value="/static/starlight-echoes.mp3">Starlight Echoes</option>
+            <option value="/static/uplifting-journey.mp3">Uplifting Journey</option>
+        </select>
+        <label style="color:#caff70;font-size:0.85rem;display:flex;align-items:center;gap:4px;" title="Mute">
+            <input type="checkbox" id="music-mute" /> 🔇
+        </label>
+        <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.5" style="width:100px;"/>
+        <span id="music-status" style="color:#caff70;font-size:0.82rem;margin-left:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+    </div>
+    <!-- Main UI Layout -->
+    <div id="main-container" class="main-container" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;width:100vw;height:100vh;max-width:100vw;max-height:100vh;gap:0;">
+        <!-- Top Section: Player Stats (Left) and Room Info (Right) -->
+        <div style="display:flex;flex-direction:row;justify-content:center;align-items:flex-start;width:96vw;max-width:1400px;gap:16px;margin-top:96px;">
+            <!-- Player Stats Sidebar (minimal) -->
+            <div class="sidebar" style="flex:0 0 420px;min-width:340px;max-width:420px;height:420px;background:rgba(20,30,20,0.96);border:2px solid #00ff99;border-radius:14px;box-shadow:0 0 16px #00ff99cc;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;overflow-y:auto;overflow-x:hidden;">
+                <div style="width:90%;background:#101c10;border-radius:10px;padding:10px 12px;box-shadow:0 0 8px #00ff9944;margin:0;flex:0 0 120px;">
+                    <h3 style="color:#00ff99;margin:0 0 8px 0;text-align:center;">Player</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:10px;">
+                        <div style="text-align:left;"><b>Name:</b> <span id="char-name">Player</span></div>
+                        <div style="text-align:left;"><b>Race:</b> <span id="char-race">-</span></div>
+                        <div style="text-align:left;"><b>Class:</b> <span id="char-class">-</span></div>
+                        <div style="text-align:left;"><b>Level:</b> <span id="char-level">1</span></div>
+                        <div style="text-align:left;"><b>Credits:</b> <span id="char-credits">0</span></div>
+                    </div>
+                    <div style="margin-top:4px;text-align:center;"><b>XP:</b></div>
+                    <div class="xp-bar" style="margin:6px auto 0 auto;max-width:280px;">
+                        <div class="xp-bar-inner" id="xp-bar-inner"></div>
+                        <span class="xp-label" id="xp-label">40 / 100</span>
+                    </div>
+                </div>
+                <div id="map-area" style="position:relative;width:90%;height:200px;margin:0;background:#0c150c;border:1px solid #00ff99;border-radius:10px;box-shadow:0 0 8px #00ff9944;overflow:hidden;padding:8px;flex:0 0 200px;"></div>
+                <div style="width:90%;display:flex;align-items:center;gap:8px;margin:6px 0 0 0;">
+                    <span style="color:#caff70;font-size:0.85rem;white-space:nowrap;">Map Zoom</span>
+                    <input id="map-zoom" type="range" min="0.6" max="2" step="0.1" value="1" style="flex:1;"/>
+                    <span id="map-zoom-label" style="color:#caff70;font-size:0.85rem;min-width:38px;text-align:right;">1.0x</span>
+                    <button id="map-zoom-reset" type="button" title="Reset zoom" style="background:#00ff99;color:#222;font-weight:700;padding:6px 10px;border-radius:6px;border:none;box-shadow:0 2px 8px #00ff9944;cursor:pointer;font-size:0.85rem;">Reset</button>
+                    <label style="display:flex;align-items:center;gap:6px;color:#caff70;font-size:0.85rem;margin-left:8px;">
+                        <input id="map-auto-center" type="checkbox" checked /> Auto-center
+                    </label>
+                </div>
+                <!-- Character Equipment Panel -->
+                <div id="equip-panel" style="position:relative;width:90%;margin:0;background:#0c150c;border:1px solid #00ff99;border-radius:10px;box-shadow:0 0 8px #00ff9944;overflow:hidden;padding:8px;display:flex;gap:8px;align-items:flex-start;justify-content:flex-start;flex:0 0 140px;">
+                    <div style="position:relative;width:80px;height:120px;background:linear-gradient(180deg,#0f2027 0%, #203a43 100%);border:1px solid #00ff99;border-radius:8px;box-shadow:inset 0 0 12px #00ff9944;flex:none;">
+                        <!-- Simple silhouette -->
+                        <svg viewBox="0 0 120 180" width="80" height="120" preserveAspectRatio="xMidYMid meet">
+                            <circle cx="60" cy="24" r="16" fill="#222" stroke="#00ff99" stroke-width="2" />
+                            <rect x="40" y="42" width="40" height="60" rx="8" fill="#222" stroke="#00ff99" stroke-width="2" />
+                            <rect x="20" y="48" width="16" height="44" rx="6" fill="#222" stroke="#00ff99" stroke-width="2" />
+                            <rect x="84" y="48" width="16" height="44" rx="6" fill="#222" stroke="#00ff99" stroke-width="2" />
+                            <rect x="42" y="104" width="14" height="56" rx="6" fill="#222" stroke="#00ff99" stroke-width="2" />
+                            <rect x="64" y="104" width="14" height="56" rx="6" fill="#222" stroke="#00ff99" stroke-width="2" />
+                        </svg>
+                    </div>
+                    <div style="flex:1;display:grid;grid-template-columns:repeat(2, minmax(120px, 1fr));gap:6px 12px;color:#caff70;min-width:0;overflow:auto;">
+                        <div><b>Head:</b> <span id="eq-head">-</span></div>
+                        <div><b>Body:</b> <span id="eq-body">-</span></div>
+                        <div><b>Hands:</b> <span id="eq-hands">-</span></div>
+                        <div><b>Legs:</b> <span id="eq-legs">-</span></div>
+                        <div><b>Feet:</b> <span id="eq-feet">-</span></div>
+                        <div><b>Weapon:</b> <span id="eq-weapon">-</span></div>
+                        <div><b>Offhand:</b> <span id="eq-offhand">-</span></div>
+                        <div><b>Accessory:</b> <span id="eq-accessory">-</span></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Room Info Sidebar (now with battle and inventory) -->
+            <div class="sidebar" style="flex:1 1 0;min-width:340px;max-width:480px;height:420px;background:rgba(20,30,20,0.96);border:2px solid #caff70;border-radius:14px;box-shadow:0 0 16px #caff70cc;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px;overflow:auto;">
+                <div style="width:90%;background:#101c10;border-radius:10px;padding:16px;box-shadow:0 0 8px #caff7044;margin:16px auto;">
+                    <h3 style="color:#caff70;margin:0 0 8px 0;text-align:center;">Room Info</h3>
+                    <div id="room-info" style="text-align:center;min-height:32px;"></div>
+                </div>
+                <div style="width:80%;background:#101c10;border-radius:10px;padding:16px;box-shadow:0 0 8px #ff003344;margin:16px auto;">
+                    <h3 style="color:#ff0033;margin:0 0 8px 0;text-align:center;">Battle</h3>
+                    <div id="fight-info" style="display:none;width:100%;color:#caff70;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div id="fight-player" style="flex:1;text-align:center;">
+                                <div><b>HP:</b> <span id="fight-player-hp">100</span></div>
+                                <div><b>Attack:</b> <span id="fight-player-attack">10</span></div>
+                                <div><b>Energy:</b> <span id="fight-player-energy">100</span></div>
+                                <div><b>Tech:</b> <span id="fight-player-tech">10</span></div>
+                                <div><b>Speed:</b> <span id="fight-player-speed">10</span></div>
+                            </div>
+                            <div style="width:2px;height:80px;background:#ff0033;margin:0 32px;"></div>
+                            <div id="fight-enemy" style="flex:1;text-align:center;">
+                                <div><b>Name:</b> <span id="fight-enemy-name">-</span></div>
+                                <div><b>HP:</b> <span id="fight-enemy-hp">-</span></div>
+                            </div>
+                        </div>
+                        <div style="display:flex;justify-content:center;gap:16px;margin-top:16px;">
+                            <button id="attack-btn" style="background:#00ff99;color:#222;font-weight:700;padding:10px 32px;border-radius:8px;border:none;box-shadow:0 2px 8px #00ff9944;cursor:pointer;font-size:1.08rem;">Attack</button>
+                            <button id="defend-btn" style="background:#caff70;color:#222;font-weight:700;padding:10px 32px;border-radius:8px;border:none;box-shadow:0 2px 8px #caff7044;cursor:pointer;font-size:1.08rem;">Defend</button>
+                            <button id="run-btn" style="background:#ff0033;color:#fff;font-weight:700;padding:10px 32px;border-radius:8px;border:none;box-shadow:0 2px 8px #ff003344;cursor:pointer;font-size:1.08rem;">Run</button>
+                        </div>
+                        <div id="battle-log" style="margin-top:12px;max-height:90px;overflow:auto;background:#0f1610;border:1px solid #ff0033;border-radius:8px;padding:8px 10px;font-size:0.9rem;box-shadow:0 0 6px #ff003344;"></div>
+                    </div>
+                </div>
+                <div style="width:80%;background:#101c10;border-radius:10px;padding:16px;box-shadow:0 0 8px #00ff9944;margin:16px auto;">
+                    <h3 style="color:#caff70;margin:0 0 8px 0;text-align:center;">Inventory</h3>
+                    <ul id="inventory-list" style="padding-left:0;text-align:center;">
+                        <li>Cyberdeck</li>
+                        <li>Neon Blade</li>
+                        <li>Stimpack</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <!-- Console Window (Bottom) -->
+        <div class="game-area" style="width:96vw;max-width:1400px;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:visible;margin:32px auto 96px auto;border-radius:14px;background:none;box-shadow:none;border:none;">
+            <div id="output" style="width:100%;height:100%;min-height:160px;max-height:calc(40vh - 96px);overflow:hidden;background:rgba(20,30,20,0.92);box-shadow:0 0 16px #00ff99cc, 0 0 4px #00ff9944;border:2px solid #00ff99;border-radius:14px;"></div>
+        </div>
+    </div>
+    <!-- Persistent Bottom Bar -->
+    <div id="bottom-bar" style="position:fixed;bottom:0;left:0;width:100vw;z-index:100;background:rgba(15,32,39,0.98);box-shadow:0 0 24px #00ff99cc, 0 0 8px #00ff9944;border-top:2px solid #00ff99;display:flex;flex-direction:row;align-items:center;justify-content:center;padding:12px 0;gap:0;">
+        <div style="display:flex;gap:18px;justify-content:center;align-items:center;flex:0 1 auto;">
+            <div style="background:#121212;color:#fff;font-weight:700;padding:8px 24px;border-radius:8px;box-shadow:0 0 8px #ff0033cc;border:1px solid #ff0033;min-width:220px;">
+                HEALTH
+                <div style="width:100%;height:10px;background:#2a2a2a;border-radius:6px;margin-top:6px;overflow:hidden;">
+                    <div id="bar-health" style="height:100%;width:100%;background:#ff0033;box-shadow:0 0 10px #ff0033cc;transition:width 1200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 1200ms cubic-bezier(0.22, 1, 0.36, 1);"></div>
+                </div>
+                <span id="bottom-health" style="margin-left:8px;">100%</span>
+            </div>
+            <div style="background:#121212;color:#fff;font-weight:700;padding:8px 24px;border-radius:8px;box-shadow:0 0 8px #caff70cc;border:1px solid #caff70;min-width:220px;">
+                ENDURANCE
+                <div style="width:100%;height:10px;background:#2a2a2a;border-radius:6px;margin-top:6px;overflow:hidden;">
+                    <div id="bar-endurance" style="height:100%;width:100%;background:#caff70;box-shadow:0 0 10px #caff70cc;transition:width 1200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 1200ms cubic-bezier(0.22, 1, 0.36, 1);"></div>
+                </div>
+                <span id="bottom-endurance" style="margin-left:8px;">100%</span>
+            </div>
+            <div style="background:#121212;color:#fff;font-weight:700;padding:8px 24px;border-radius:8px;box-shadow:0 0 8px #ffe600cc;border:1px solid #ffe600;min-width:220px;">
+                WILLPOWER
+                <div style="width:100%;height:10px;background:#2a2a2a;border-radius:6px;margin-top:6px;overflow:hidden;">
+                    <div id="bar-willpower" style="height:100%;width:100%;background:#ffe600;box-shadow:0 0 10px #ffe600cc;transition:width 1200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 1200ms cubic-bezier(0.22, 1, 0.36, 1);"></div>
+                </div>
+                <span id="bottom-willpower" style="margin-left:8px;">100%</span>
+            </div>
+        </div>
+        <div style="flex:0 1 700px;display:flex;justify-content:center;align-items:center;margin-left:48px;">
+            <input id="input" type="text" placeholder="Type a command..." autofocus autocomplete="off" style="max-width:600px;width:100%;margin:0 12px 0 12px;padding:12px;background:#101c10cc;color:#caff70;border:1.5px solid #00ff99;border-radius:8px;font-size:1.08rem;box-shadow:0 0 8px #00ff9944 inset;" />
+            <button id="send-btn" style="background:#00ff99;color:#222;font-weight:700;padding:12px 24px;border-radius:8px;border:none;box-shadow:0 2px 8px #00ff9944;cursor:pointer;font-size:1.08rem;margin-left:8px;">Send</button>
+        </div>
+    </div>
+    <form action="/logout" method="get" style="width:100%; display:flex; justify-content:center; margin-top:32px;">
+        <button type="submit" style="background:linear-gradient(90deg,#00ff99 0%,#caff70 100%);color:#222;font-weight:700;padding:12px 36px;border-radius:10px;border:none;box-shadow:0 2px 12px #00ff9944;cursor:pointer;font-size:1.1rem;">Logout</button>
+    </form>
+    <script>
+        // Ensure socket is globally available before any handlers
+        window.socket = io();
+                        // Fight action buttons
+                        function setupFightButtons() {
+                            const attackBtn = document.getElementById('attack-btn');
+                            const defendBtn = document.getElementById('defend-btn');
+                            const runBtn = document.getElementById('run-btn');
+                            if (attackBtn) {
+                                attackBtn.onclick = function() {
+                                    socket.emit('command', {command: 'attack'});
+                                    // Trigger hit effect for player attack
+                                    const mainContainer = document.getElementById('main-container');
+                                    if (mainContainer) {
+                                        mainContainer.classList.add('hit-effect');
+                                        setTimeout(() => {
+                                            mainContainer.classList.remove('hit-effect');
+                                        }, 1200);
+                                    }
+                                };
+                            }
+                            if (defendBtn) {
+                                defendBtn.onclick = function() {
+                                    socket.emit('command', {command: 'defend'});
+                                };
+                            }
+                            if (runBtn) {
+                                runBtn.onclick = function() {
+                                    socket.emit('command', {command: 'run'});
+                                };
+                            }
+                        }
+                // Show/hide fight info UI based on fight state
+                function updateFightInfo(player, enemy) {
+                    const fightInfo = document.getElementById('fight-info');
+                    if (player && enemy) {
+                        fightInfo.style.display = 'block';
+                        document.getElementById('fight-player-hp').textContent = player.hp;
+                        document.getElementById('fight-player-attack').textContent = player.attack;
+                        document.getElementById('fight-player-energy').textContent = player.energy;
+                        document.getElementById('fight-player-tech').textContent = player.tech;
+                        document.getElementById('fight-player-speed').textContent = player.speed;
+                        document.getElementById('fight-enemy-name').textContent = enemy.name;
+                        document.getElementById('fight-enemy-hp').textContent = enemy.hp;
+                        setupFightButtons();
+                    } else {
+                        fightInfo.style.display = 'none';
+                    }
+                }
+        document.addEventListener('DOMContentLoaded', function() {
+            const socket = window.socket;
+            const output = document.getElementById('output');
+            const input = document.getElementById('input');
+            const sendBtn = document.getElementById('send-btn');
+            // Map zoom controls
+            const zoomInput = document.getElementById('map-zoom');
+            const zoomLabel = document.getElementById('map-zoom-label');
+            const zoomReset = document.getElementById('map-zoom-reset');
+            const autoCenterChk = document.getElementById('map-auto-center');
+            try {
+                const savedZoom = parseFloat(localStorage.getItem('map.zoom'));
+                const savedAuto = localStorage.getItem('map.autoCenter');
+                if (!isNaN(savedZoom) && zoomInput) {
+                    window._mapZoom = Math.min(2, Math.max(0.6, savedZoom));
+                    zoomInput.value = String(window._mapZoom);
+                    if (zoomLabel) zoomLabel.textContent = `${window._mapZoom.toFixed(1)}x`;
+                } else {
+                    window._mapZoom = 1.0;
+                }
+                if (autoCenterChk) {
+                    const ac = (savedAuto === null) ? true : (savedAuto === 'true');
+                    autoCenterChk.checked = ac;
+                    window._mapAutoCenter = ac;
+                } else {
+                    window._mapAutoCenter = true;
+                }
+            } catch(e) {
+                window._mapZoom = 1.0;
+                window._mapAutoCenter = true;
+            }
+            if (zoomInput) {
+                zoomInput.addEventListener('input', () => {
+                    const z = parseFloat(zoomInput.value);
+                    if (!isNaN(z)) {
+                        window._mapZoom = Math.min(2, Math.max(0.6, z));
+                        if (zoomLabel) zoomLabel.textContent = `${window._mapZoom.toFixed(1)}x`;
+                        try { localStorage.setItem('map.zoom', String(window._mapZoom)); } catch(e) {}
+                        // Re-render map if we have the latest data
+                        if (window._lastPlayerInfo && window._lastPlayerInfo.rooms && window._lastPlayerInfo.current_room) {
+                            renderMap(window._lastPlayerInfo.rooms, window._lastPlayerInfo.current_room);
+                        }
+                    }
+                });
+            }
+            if (zoomReset) {
+                zoomReset.addEventListener('click', () => {
+                    window._mapZoom = 1.0;
+                    if (zoomInput) zoomInput.value = '1.0';
+                    if (zoomLabel) zoomLabel.textContent = '1.0x';
+                    try { localStorage.setItem('map.zoom', '1.0'); } catch(e) {}
+                    if (window._lastPlayerInfo && window._lastPlayerInfo.rooms && window._lastPlayerInfo.current_room) {
+                        renderMap(window._lastPlayerInfo.rooms, window._lastPlayerInfo.current_room);
+                    }
+                });
+            }
+            if (autoCenterChk) {
+                autoCenterChk.addEventListener('change', () => {
+                    window._mapAutoCenter = !!autoCenterChk.checked;
+                    try { localStorage.setItem('map.autoCenter', String(window._mapAutoCenter)); } catch(e) {}
+                    // If enabling auto-center, recenter now
+                    if (window._mapAutoCenter) {
+                        window._mapPanX = 0; window._mapPanY = 0;
+                        if (window._lastPlayerInfo && window._lastPlayerInfo.rooms && window._lastPlayerInfo.current_room) {
+                            renderMap(window._lastPlayerInfo.rooms, window._lastPlayerInfo.current_room);
+                        }
+                    }
+                });
+            }
+            // Background music controls
+            const bgMusic = document.getElementById('bg-music');
+            const musicToggle = document.getElementById('music-toggle');
+            const musicMute = document.getElementById('music-mute');
+            const musicTrack = document.getElementById('music-track');
+            const musicVolume = document.getElementById('music-volume');
+            let musicPlaying = false;
+            let _fadeTimer = null;
+            const musicStatus = document.getElementById('music-status');
+            function setStatus(text) { if (musicStatus) musicStatus.textContent = text || ''; }
+            function updateMusicUI() {
+                musicToggle.textContent = musicPlaying ? 'Pause' : 'Play';
+                // Hide status unless there is an error or readiness message
+            }
+            function fadeTo(targetVol, durationMs = 400, done) {
+                if (_fadeTimer) { clearInterval(_fadeTimer); _fadeTimer = null; }
+                const startVol = bgMusic.volume;
+                const delta = targetVol - startVol;
+                const steps = Math.max(1, Math.floor(durationMs / 20));
+                let i = 0;
+                _fadeTimer = setInterval(() => {
+                    i++;
+                    const t = i / steps;
+                    // ease-in-out
+                    const eased = t < 0.5 ? 2*t*t : -1 + (4 - 2*t) * t;
+                    bgMusic.volume = Math.max(0, Math.min(1, startVol + delta * eased));
+                    if (i >= steps) {
+                        clearInterval(_fadeTimer);
+                        _fadeTimer = null;
+                        bgMusic.volume = targetVol;
+                        if (typeof done === 'function') done();
+                    }
+                }, 20);
+            }
+
+            async function crossFadeTo(src) {
+                const prevVol = bgMusic.volume;
+                const wasPlaying = musicPlaying;
+                try { localStorage.setItem('music.src', src); } catch(e) {}
+                if (wasPlaying) {
+                    // Fade out, swap, fade in
+                    fadeTo(0, 300, async () => {
+                        bgMusic.pause();
+                        bgMusic.src = src;
+                        try {
+                            await bgMusic.play();
+                            musicPlaying = true;
+                        } catch(e) {
+                            musicPlaying = false;
+                        }
+                        fadeTo(prevVol, 500);
+                        updateMusicUI();
+                    });
+                } else {
+                    bgMusic.src = src;
+                    updateMusicUI();
+                }
+            }
+
+            
+            // Restore previous settings
+            try {
+                const savedSrc = localStorage.getItem('music.src');
+                const savedVol = localStorage.getItem('music.volume');
+                const savedMuted = localStorage.getItem('music.muted');
+                if (savedSrc) { bgMusic.src = savedSrc; musicTrack.value = savedSrc; }
+                if (savedVol) { bgMusic.volume = parseFloat(savedVol); musicVolume.value = savedVol; }
+                if (savedMuted) { const m = savedMuted === 'true'; bgMusic.muted = m; musicMute.checked = m; }
+            } catch(e) {}
+
+            musicToggle.addEventListener('click', async () => {
+                try {
+                    if (!musicPlaying) {
+                        await bgMusic.play();
+                        musicPlaying = true;
+                        // no status for normal play
+                    } else {
+                        bgMusic.pause();
+                        musicPlaying = false;
+                        // no status for normal pause
+                    }
+                    updateMusicUI();
+                } catch (e) {
+                    // Autoplay restrictions may block until user interacts
+                    setStatus('Click Play to start');
+                }
+            });
+            musicMute.addEventListener('change', () => {
+                bgMusic.muted = musicMute.checked;
+                try { localStorage.setItem('music.muted', String(bgMusic.muted)); } catch(e) {}
+            });
+            musicTrack.addEventListener('change', () => {
+                crossFadeTo(musicTrack.value);
+            });
+            // Audio diagnostics
+            bgMusic.addEventListener('error', () => { setStatus('Load error'); });
+            bgMusic.addEventListener('canplay', () => { if (!musicPlaying) setStatus(''); });
+            bgMusic.addEventListener('ended', () => { if (!bgMusic.loop) setStatus('Ended'); });
+            musicVolume.addEventListener('input', () => {
+                bgMusic.volume = parseFloat(musicVolume.value);
+                try { localStorage.setItem('music.volume', musicVolume.value); } catch(e) {}
+            });
+            // Respect system reduced motion or prefers-reduced-transparency if needed in future
+            updateMusicUI();
+            let introShown = false;
+            const introStory = `<span style='color:#00ff99;'>The city pulses with neon and rain. You jack in, senses flooded by data streams and distant sirens.<br>Welcome to Cyberdelia EX.<br><br>Your journey begins now...</span><br><br>`;
+
+            function appendMessage(msg) {
+                if (!introShown) {
+                    output.innerHTML = introStory;
+                    introShown = true;
+                }
+                output.innerHTML += msg + '<br>';
+                output.scrollTop = output.scrollHeight;
+            }
+
+            socket.on('message', function(msg) {
+                appendMessage(msg.data);
+                // Append to battle mini-log if fight is active
+                const info = window._lastPlayerInfo;
+                const logBox = document.getElementById('battle-log');
+                if (logBox && info && info.fight_opponent && info.fight_hp !== undefined && info.fight_hp !== null) {
+                    const maxEntries = 10;
+                    const line = document.createElement('div');
+                    line.textContent = (msg.data || '').toString().replace(/\n/g, ' ');
+                    logBox.appendChild(line);
+                    while (logBox.childNodes.length > maxEntries) {
+                        logBox.removeChild(logBox.firstChild);
+                    }
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+            });
+
+            function setStatBox(elemId, value, colors) {
+                const el = document.getElementById(elemId);
+                if (!el) return;
+                const v = Number.isFinite(value) ? value : 100;
+                let colorCfg = colors.good;
+                if (v < 30) colorCfg = colors.bad;
+                else if (v < 70) colorCfg = colors.mid;
+                el.style.background = colorCfg.bg;
+                el.style.color = colorCfg.fg;
+                el.style.boxShadow = colorCfg.shadow;
+                el.textContent = el.textContent.replace(/:\s*.*$/, `: ${v}%`);
+            }
+
+            socket.on('player_info', function(info) {
+                // Keep a copy for map zoom re-rendering
+                window._lastPlayerInfo = info;
+                // Center map on player on update only if auto-center enabled
+                if (window._mapAutoCenter) { window._mapPanX = 0; window._mapPanY = 0; }
+                // Update top-left player UI (Name, Race, Class, XP)
+                const nameEl = document.getElementById('char-name');
+                if (nameEl) nameEl.textContent = info.name || '-';
+                const raceEl = document.getElementById('char-race');
+                if (raceEl) raceEl.textContent = info.race || '-';
+                const classEl = document.getElementById('char-class');
+                if (classEl) classEl.textContent = info.char_class || '-';
+                const levelEl = document.getElementById('char-level');
+                if (levelEl) levelEl.textContent = (info.level !== undefined && info.level !== null) ? info.level : '-';
+                const xpInner = document.getElementById('xp-bar-inner');
+                const xpLbl = document.getElementById('xp-label');
+                if (xpInner) xpInner.style.width = ((info.xp_max > 0 ? info.xp / info.xp_max : 0) * 100) + '%';
+                if (xpLbl) xpLbl.textContent = (info.xp || 0) + ' / ' + (info.xp_max || 0);
+                const creditsEl = document.getElementById('char-credits');
+                if (creditsEl) creditsEl.textContent = (info.credits !== undefined && info.credits !== null) ? info.credits : '0';
+
+                // Update equipment panel
+                if (info.equipment) {
+                    const eq = info.equipment || {};
+                    const setEq = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '-'; };
+                    setEq('eq-head', eq.head);
+                    setEq('eq-body', eq.body);
+                    setEq('eq-hands', eq.hands);
+                    setEq('eq-legs', eq.legs);
+                    setEq('eq-feet', eq.feet);
+                    setEq('eq-weapon', eq.weapon);
+                    setEq('eq-offhand', eq.offhand);
+                    setEq('eq-accessory', eq.accessory);
+                }
+
+                // Update bottom bar stat numbers + animate bars
+                const hp = (info.hp !== undefined ? info.hp : 100);
+                const end = (info.endurance !== undefined ? info.endurance : 100);
+                const will = (info.willpower !== undefined ? info.willpower : 100);
+                const bh = document.getElementById('bottom-health');
+                const be = document.getElementById('bottom-endurance');
+                const bw = document.getElementById('bottom-willpower');
+                if (bh) bh.textContent = hp + '%';
+                if (be) be.textContent = end + '%';
+                if (bw) bw.textContent = will + '%';
+                const barH = document.getElementById('bar-health');
+                const barE = document.getElementById('bar-endurance');
+                const barW = document.getElementById('bar-willpower');
+                // Remember previous values to trigger pulse on change
+                window._prevStats = window._prevStats || {hp:null,end:null,will:null};
+                const clamp = v => Math.max(0, Math.min(100, v));
+                const setBar = (el, v, cls) => {
+                    if (!el) return;
+                    const pct = clamp(v) + '%';
+                    if (el.style.width !== pct) {
+                        el.style.width = pct;
+                        el.classList.remove('pulse-green','pulse-yellow','pulse-red');
+                        el.offsetWidth; // reflow
+                        el.classList.add(cls);
+                        setTimeout(() => {
+                            el.classList.remove(cls);
+                        }, 650);
+                    }
+                };
+                // Choose pulse color by thresholds
+                const clsH = hp < 30 ? 'pulse-red' : (hp < 70 ? 'pulse-yellow' : 'pulse-green');
+                const clsE = end < 30 ? 'pulse-red' : (end < 70 ? 'pulse-yellow' : 'pulse-green');
+                const clsW = will < 30 ? 'pulse-red' : (will < 70 ? 'pulse-yellow' : 'pulse-green');
+                setBar(barH, hp, clsH);
+                setBar(barE, end, clsE);
+                setBar(barW, will, clsW);
+                window._prevStats = {hp, end, will};
+
+                // Update sidebar-derived content including map
+                if (typeof updateSidebar === 'function') {
+                    updateSidebar(
+                        info.name,
+                        info.race,
+                        info.char_class,
+                        info.level,
+                        info.xp,
+                        info.xp_max,
+                        info.inventory,
+                        info.hp,
+                        info.energy,
+                        info.strength,
+                        info.tech,
+                        info.speed,
+                        info.abilities,
+                        info.effects,
+                        info.current_room,
+                        info.rooms,
+                        info.attack,
+                        info.attack_boost
+                    );
+                }
+
+                // Update right Room Info box
+                if (info.room_info) {
+                    updateRoomInfo(info.room_info);
+                }
+                // Update inventory list
+                (function(){
+                    const inv = Array.isArray(info.inventory) ? info.inventory : [];
+                    const ul = document.getElementById('inventory-list');
+                    if (ul) {
+                        ul.innerHTML = '';
+                        // Group items by name to show stack counts
+                        const counts = {};
+                        inv.forEach(i => { const k = (i||'').toString(); counts[k] = (counts[k]||0)+1; });
+                        Object.keys(counts).sort().forEach(name => {
+                            const li = document.createElement('li');
+                            const n = counts[name];
+                            li.textContent = n > 1 ? `${name} (x${n})` : name;
+                            ul.appendChild(li);
+                        });
+                    }
+                })();
+                // Render map under player window
+                if (info.rooms && info.current_room) {
+                    renderMap(info.rooms, info.current_room);
+                }
+
+                // Update battle box (top right) when fight data present
+                if (info.fight_opponent && info.fight_hp !== undefined && info.fight_hp !== null) {
+                    updateFightInfo({
+                        hp: info.hp,
+                        attack: info.attack,
+                        energy: info.energy,
+                        tech: info.tech,
+                        speed: info.speed
+                    }, {
+                        name: info.fight_opponent,
+                        hp: info.fight_hp
+                    });
+                    // Auto-focus the battle panel in the right sidebar
+                    const fightInfoEl = document.getElementById('fight-info');
+                    if (fightInfoEl) {
+                        // Ensure it's visible before scrolling
+                        fightInfoEl.style.display = 'block';
+                        // Smoothly scroll into view within the sidebar
+                        fightInfoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        // Brief highlight to draw attention
+                        const prevBoxShadow = fightInfoEl.style.boxShadow;
+                        fightInfoEl.style.boxShadow = '0 0 18px #caff70cc, 0 0 6px #caff7066';
+                        setTimeout(() => {
+                            fightInfoEl.style.boxShadow = prevBoxShadow || '';
+                        }, 650);
+                    }
+                } else {
+                    updateFightInfo(null, null);
+                }
+
+                // Client-side regen removed; stats now driven by server updates
+            });
+
+            // Helper to convert room keys like 'neon_plaza' to 'Neon Plaza'
+            function prettyRoomName(key) {
+                if (!key || typeof key !== 'string') return '-';
+                // Replace underscores/hyphens with spaces and title-case words
+                const spaced = key.replace(/[\-_]+/g, ' ').trim();
+                return spaced.replace(/\b\w/g, (c) => c.toUpperCase());
+            }
+
+            function renderMap(rooms, currentRoom) {
+                const mapArea = document.getElementById('map-area');
+                if (!mapArea || !rooms[currentRoom]) return;
+                const dirVec = { north:[0,-1], south:[0,1], east:[1,0], west:[-1,0] };
+                const maxDepth = 5; // how far from current to render
+                const grid = {}; // room -> {x,y}
+                const seen = new Set();
+                const q = [[currentRoom, 0, 0, 0]]; // room, x, y, depth
+                grid[currentRoom] = {x:0, y:0};
+                seen.add(currentRoom);
+                while (q.length) {
+                    const [room, x, y, d] = q.shift();
+                    const exits = (rooms[room] && rooms[room].exits) ? rooms[room].exits : {};
+                    for (const [dir, target] of Object.entries(exits)) {
+                        if (!(dir in dirVec)) continue; // only cardinal directions
+                        const [dx, dy] = dirVec[dir];
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (grid[target] === undefined) {
+                            grid[target] = {x:nx, y:ny};
+                        }
+                        if (!seen.has(target) && d < maxDepth) {
+                            seen.add(target);
+                            q.push([target, nx, ny, d+1]);
+                        }
+                    }
+                }
+                // Compute bounds
+                let minX=0, maxX=0, minY=0, maxY=0;
+                Object.values(grid).forEach(p => {
+                    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+                });
+                const cell = 70; // pixels per grid cell
+                const pad = 50; // border padding
+                const width = (maxX - minX + 1) * cell + pad*2;
+                const height = (maxY - minY + 1) * cell + pad*2;
+                const zoom = Math.max(0.6, Math.min(2, window._mapZoom || 1));
+                const cxMid = width / 2;
+                const cyMid = height / 2;
+                // Position of current room in SVG coords
+                const curX = (0 - minX) * cell + pad;
+                const curY = (0 - minY) * cell + pad;
+                // Current pan (in SVG units, pre-scale)
+                const panX = Number.isFinite(window._mapPanX) ? window._mapPanX : 0;
+                const panY = Number.isFinite(window._mapPanY) ? window._mapPanY : 0;
+                // Build inner content first
+                let content = '';
+                // Draw links
+                for (const [room, pos] of Object.entries(grid)) {
+                    const exits = (rooms[room] && rooms[room].exits) ? rooms[room].exits : {};
+                    for (const [dir, target] of Object.entries(exits)) {
+                        if (!(dir in dirVec) || !grid[target]) continue;
+                        const p1x = (pos.x - minX) * cell + pad;
+                        const p1y = (pos.y - minY) * cell + pad;
+                        const p2x = (grid[target].x - minX) * cell + pad;
+                        const p2y = (grid[target].y - minY) * cell + pad;
+                        if (p1x < p2x || p1y < p2y) {
+                            content += `<line x1=\"${p1x}\" y1=\"${p1y}\" x2=\"${p2x}\" y2=\"${p2y}\" stroke=\"#00ff99\" stroke-width=\"2\" stroke-opacity=\"0.7\" />`;
+                        }
+                    }
+                }
+                // Draw nodes
+                for (const [room, pos] of Object.entries(grid)) {
+                    const cx = (pos.x - minX) * cell + pad;
+                    const cy = (pos.y - minY) * cell + pad;
+                    const isCurrent = room === currentRoom;
+                    content += `<circle cx=\"${cx}\" cy=\"${cy}\" r=\"18\" fill=\"${isCurrent?'#00ff99':'#222'}\" stroke=\"#00ff99\" stroke-width=\"2\" data-room=\"${room}\" style=\"cursor:pointer;\" />`;
+                    // Draw an animated neon X marker to highlight the player's current room
+                    if (isCurrent) {
+                        const xSize = 16;
+                        const xStyle = `stroke-linecap:round; animation:pulseXStroke 1200ms ease-in-out infinite;`;
+                        content += `<line x1=\"${cx - xSize}\" y1=\"${cy - xSize}\" x2=\"${cx + xSize}\" y2=\"${cy + xSize}\" style=\"${xStyle}\" />`;
+                        content += `<line x1=\"${cx - xSize}\" y1=\"${cy + xSize}\" x2=\"${cx + xSize}\" y2=\"${cy - xSize}\" style=\"${xStyle}\" />`;
+                    }
+                    const full = prettyRoomName(room);
+                    const label = full.length > 18 ? full.slice(0,17) + '…' : full;
+                    const fillColor = isCurrent ? '#222' : '#caff70';
+                    content += `<text x=\"${cx}\" y=\"${cy+5}\" text-anchor=\"middle\" font-size=\"14\" font-family=\"Share Tech Mono, monospace\" stroke=\"#000\" stroke-width=\"3\" fill=\"none\">${label}</text>`;
+                    content += `<text x=\"${cx}\" y=\"${cy+5}\" text-anchor=\"middle\" font-size=\"14\" font-family=\"Share Tech Mono, monospace\" fill=\"${fillColor}\">${label}</text>`;
+                }
+                // Wrap content with a centered transform to zoom about the midpoint
+                let svg = `<svg id=\"mud-map-svg\" width=\"100%\" height=\"100%\" viewBox=\"0 0 ${width} ${height}\" preserveAspectRatio=\"xMidYMid meet\" style=\"display:block;\">`;
+                // Center on current room, then apply zoom and pan
+                // Transform order: center -> scale -> translate (pan - current)
+                svg += `<g transform=\"translate(${cxMid}, ${cyMid}) scale(${zoom}) translate(${panX - curX}, ${panY - curY})\">` + content + `</g>`;
+                svg += '</svg>';
+                mapArea.innerHTML = svg;
+                // Click to move only if adjacent from current room
+                mapArea.onclick = function(ev) {
+                    if (window._mapDragging) return; // ignore click during drag
+                    const target = ev.target;
+                    const roomTarget = target && target.getAttribute && target.getAttribute('data-room');
+                    if (!roomTarget || roomTarget === currentRoom) return;
+                    const exits = rooms[currentRoom]?.exits || {};
+                    let dir = null;
+                    for (const [k,v] of Object.entries(exits)) { if (v === roomTarget) { dir = k; break; } }
+                    if (dir) {
+                        window.socket.emit('command', { command: 'go ' + dir });
+                    }
+                };
+                // Pan (drag) support on mapArea
+                if (!window._mapDragInit) {
+                    window._mapDragInit = true;
+                    let lastX = 0, lastY = 0;
+                    let startPanX = 0, startPanY = 0;
+                    const onDown = (e) => {
+                        window._mapDragging = true;
+                        mapArea.style.cursor = 'grabbing';
+                        const pt = (e.touches && e.touches[0]) ? e.touches[0] : e;
+                        lastX = pt.clientX; lastY = pt.clientY;
+                        startPanX = Number.isFinite(window._mapPanX) ? window._mapPanX : 0;
+                        startPanY = Number.isFinite(window._mapPanY) ? window._mapPanY : 0;
+                        e.preventDefault();
+                    };
+                    const onMove = (e) => {
+                        if (!window._mapDragging) return;
+                        const pt = (e.touches && e.touches[0]) ? e.touches[0] : e;
+                        const dx = pt.clientX - lastX;
+                        const dy = pt.clientY - lastY;
+                        // Convert screen delta to SVG units
+                        const clientW = mapArea.clientWidth || 1;
+                        const clientH = mapArea.clientHeight || 1;
+                        const scaleX = width / clientW;
+                        const scaleY = height / clientH;
+                        const svgDx = (dx * scaleX) / zoom;
+                        const svgDy = (dy * scaleY) / zoom;
+                        window._mapPanX = startPanX + svgDx;
+                        window._mapPanY = startPanY + svgDy;
+                        // Re-render quickly
+                        if (window._lastPlayerInfo && window._lastPlayerInfo.rooms && window._lastPlayerInfo.current_room) {
+                            renderMap(window._lastPlayerInfo.rooms, window._lastPlayerInfo.current_room);
+                        }
+                        e.preventDefault();
+                    };
+                    const onUp = () => {
+                        window._mapDragging = false;
+                        mapArea.style.cursor = 'grab';
+                    };
+                    mapArea.addEventListener('mousedown', onDown);
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onUp);
+                    mapArea.addEventListener('touchstart', onDown, {passive:false});
+                    window.addEventListener('touchmove', onMove, {passive:false});
+                    window.addEventListener('touchend', onUp);
+                    mapArea.style.cursor = 'grab';
+                }
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const cmd = input.value;
+                    if (cmd.trim() !== '') {
+                        socket.emit('command', {command: cmd});
+                        input.value = '';
+                    }
+                }
+            });
+            sendBtn.addEventListener('click', function() {
+                const cmd = input.value;
+                if (cmd.trim() !== '') {
+                    socket.emit('command', {command: cmd});
+                    input.value = '';
+                }
+            });
+
+            // Welcome modal logic
+            const enterBtn = document.getElementById('enter-btn');
+            if (enterBtn) {
+                enterBtn.addEventListener('click', function() {
+                    document.getElementById('welcome-modal').style.display = 'none';
+                    input.disabled = false;
+                    sendBtn.disabled = false;
+                    input.focus();
+                });
+            } else {
+                input.disabled = false;
+                sendBtn.disabled = false;
+            }
+        });
+        // Listen for player_hit event and apply shake/glow effect
+        socket.on('player_hit', function() {
+            const mainContainer = document.getElementById('main-container');
+            if (mainContainer) {
+                mainContainer.classList.add('hit-effect');
+                setTimeout(() => {
+                    mainContainer.classList.remove('hit-effect');
+                }, 1200);
+            }
+        });
+        // Heal glow on health bar when Stimpack is used
+        socket.on('player_heal', function() {
+            const barH = document.getElementById('bar-health');
+            const barE = document.getElementById('bar-endurance');
+            if (barH) {
+                barH.classList.add('heal-effect');
+                setTimeout(() => { barH.classList.remove('heal-effect'); }, 1000);
+            }
+            if (barE) {
+                barE.classList.add('end-heal-effect');
+                setTimeout(() => { barE.classList.remove('end-heal-effect'); }, 1000);
+            }
+        });
+        // Willpower-specific heal glow (for future consumables)
+        socket.on('player_will_heal', function() {
+            const barW = document.getElementById('bar-willpower');
+            if (barW) {
+                barW.classList.add('will-heal-effect');
+                setTimeout(() => { barW.classList.remove('will-heal-effect'); }, 1200);
+            }
+        });
+        // Listen for player_crit event and apply golden pulse effect on battle panel
+        socket.on('player_crit', function() {
+            const fightInfo = document.getElementById('fight-info');
+            const enemyHpEl = document.getElementById('fight-enemy-hp');
+            const enemyBox = document.getElementById('fight-enemy');
+            if (fightInfo) {
+                const prevBoxShadow = fightInfo.style.boxShadow;
+                const prevBorder = fightInfo.parentElement && fightInfo.parentElement.style ? fightInfo.parentElement.style.borderColor : null;
+                fightInfo.classList.add('crit-effect');
+                if (fightInfo.parentElement && fightInfo.parentElement.style) {
+                    fightInfo.parentElement.style.borderColor = '#ffe600';
+                }
+                if (enemyHpEl) {
+                    const prevColor = enemyHpEl.style.color;
+                    enemyHpEl.style.color = '#ffe600';
+                    enemyHpEl.style.textShadow = '0 0 8px #ffe600';
+                    setTimeout(() => {
+                        enemyHpEl.style.color = prevColor || '#caff70';
+                        enemyHpEl.style.textShadow = '';
+                    }, 700);
+                }
+                if (enemyBox) {
+                    enemyBox.classList.add('crit-effect');
+                    setTimeout(() => {
+                        enemyBox.classList.remove('crit-effect');
+                    }, 700);
+                }
+                setTimeout(() => {
+                    fightInfo.classList.remove('crit-effect');
+                    if (fightInfo.parentElement && fightInfo.parentElement.style) {
+                        fightInfo.parentElement.style.borderColor = prevBorder || '#ff0033';
+                    }
+                }, 700);
+            }
+        });
+        // Matrix rain effect
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        let w = window.innerWidth;
+        let h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        const fontSize = 18;
+        const columns = Math.floor(w / fontSize);
+        const drops = Array(columns).fill(1);
+        const matrixChars = 'アァイィウヴエェオカガキギクグケゲコゴサザシジスズセゼソゾタダチッヂヅテデトドナニヌネノハバパヒビピフブプヘベペホボポマミムメモヤユヨラリルレロワヲンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(15,32,39,0.15)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.font = fontSize + 'px Share Tech Mono, monospace';
+            for (let i = 0; i < drops.length; i++) {
+                const text = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+                ctx.fillStyle = '#00ff99';
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > h && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 50);
+        window.addEventListener('resize', () => {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+        });
+        const output = document.getElementById('output');
+        const input = document.getElementById('input');
+        // Sidebar elements
+        const charName = document.getElementById('char-name');
+        const charLevel = document.getElementById('char-level');
+        const xpBarInner = document.getElementById('xp-bar-inner');
+        const xpLabel = document.getElementById('xp-label');
+        const inventoryList = document.getElementById('inventory-list');
+
+
+        // Update sidebar with real data from server
+
+        // Always enable command input after welcome modal is closed
+        let movementEnabled = false;
+        function enableInput() {
+            movementEnabled = true;
+            input.disabled = false;
+            document.getElementById('send-btn').disabled = false;
+            input.focus();
+        }
+        document.getElementById('enter-btn').addEventListener('click', function() {
+            document.getElementById('welcome-modal').style.display = 'none';
+            enableInput();
+        });
+        // If modal is not present (already closed), enable input immediately
+        if (!document.getElementById('welcome-modal') || document.getElementById('welcome-modal').style.display === 'none') {
+            enableInput();
+        }
+        // Fix: Always allow command input regardless of movementEnabled
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const cmd = input.value;
+                if (cmd.trim() !== '') {
+                    socket.emit('command', {command: cmd});
+                    input.value = '';
+                }
+            }
+        });
+        document.getElementById('send-btn').addEventListener('click', function() {
+            const cmd = input.value;
+            if (cmd.trim() !== '') {
+                socket.emit('command', {command: cmd});
+                input.value = '';
+            }
+        });
+        // Welcome modal logic
+        document.getElementById('enter-btn').addEventListener('click', function() {
+            document.getElementById('welcome-modal').style.display = 'none';
+            movementEnabled = true;
+            input.focus();
+        });
+                function updateRoomInfo(info) {
+                    // Ensure we present a friendlier room title
+                    const pretty = (k) => (k && typeof k === 'string') ? k.replace(/[\-_]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : '-';
+                    const roomInfo = document.getElementById('room-info');
+                    if (roomInfo && info) {
+                        let html = '';
+                        if (info.name) html += `<b>${pretty(info.name)}</b><br>`;
+                        if (info.description) html += `${info.description}<br>`;
+                        if (info.exits) html += `<b>Exits:</b> ${Object.keys(info.exits).join(', ')}<br>`;
+                        if (info.npcs && info.npcs.length) html += `<b>NPCs:</b> ${info.npcs.map(n => `${n.name} (${n.role})`).join(', ')}<br>`;
+                        if (info.items && info.items.length) html += `<b>Items:</b> ${info.items.join(', ')}<br>`;
+                        if (info.mobs && info.mobs.length) html += `<b>Mobs:</b> ${info.mobs.join(', ')}<br>`;
+                        roomInfo.innerHTML = html;
+                    }
+                }
+                socket.on('room_info', function(info) {
+                    updateRoomInfo(info);
+                });
+    </script>
+</body>
+</html>
+
+

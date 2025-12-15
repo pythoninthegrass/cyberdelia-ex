@@ -1,0 +1,16 @@
+{
+    "rooms": {
+        "start": {
+            "description": "You are in a small room. Exits are north and east.",
+            "exits": {"north": "hall", "east": "closet"}
+        },
+        "hall": {
+            "description": "A long hallway. Exits are south.",
+            "exits": {"south": "start"}
+        },
+        "closet": {
+            "description": "A dusty closet. Exits are west.",
+            "exits": {"west": "start"}
+        }
+    }
+}
