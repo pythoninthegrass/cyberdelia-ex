@@ -1,3 +1,5 @@
+![CI](https://github.com/Razaroth/game-project/actions/workflows/ci.yml/badge.svg?branch=main)
+
 ## Quick Setup (Windows)
 - **Python:** Install Python 3.11 or 3.12.
 - **Create venv:**
@@ -96,6 +98,7 @@ This project is a cyberpunk-themed, text-based MMORPG with a modern web UI. It f
 ## Contributing
 - Fork the repo and submit pull requests
 - Follow PEP8 and best practices
+ - See CONTRIBUTING.md for details
 
 ## License
 MIT
