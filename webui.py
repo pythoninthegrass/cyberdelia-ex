@@ -6,7 +6,7 @@ import threading
 from dotenv import load_dotenv
 from flask import Flask, redirect, render_template, request, session, url_for
 from flask_mail import Mail, Message
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit
 from game.commands import handle_command
 from game.player import Player
 from game.races_classes import CLASSES, RACES
@@ -308,7 +308,6 @@ ADMIN_PASS = generate_password_hash('adminpass')
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
-    error = None
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
     if request.method == 'POST':

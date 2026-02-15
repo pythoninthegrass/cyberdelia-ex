@@ -189,9 +189,7 @@ def handle_command(command, player, world, accounts=None, save_accounts=None):
         result = world.move_player(player, direction)
         # After moving, check for roaming gangs in the new room
         mobs_here = world.get_mobs_in_room(player.current_room) if hasattr(world, 'get_mobs_in_room') else []
-        if mobs_here:
-            # 50% chance to get jumped if a mob is present
-            if random.random() < 0.5:
+        if mobs_here and random.random() < 0.5:
                 player.in_fight = True
                 # Pick one mob present for the encounter
                 opp = random.choice(mobs_here)
