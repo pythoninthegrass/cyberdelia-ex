@@ -1,5 +1,6 @@
 import random
 
+
 def handle_command(command, player, world, accounts=None, save_accounts=None):
     # Search command for loot after fights
     if command == 'search':
@@ -233,7 +234,7 @@ def handle_command(command, player, world, accounts=None, save_accounts=None):
         inv_match = next((i for i in player.inventory if i.lower() == item_name.lower()), None)
         if not inv_match:
             return f"You don't have {item_name}."
-        slot = slot_for_item.get(inv_match, None)
+        slot = slot_for_item.get(inv_match)
         if not slot:
             return f"{inv_match} cannot be equipped."
         # Equip: move from inventory to slot, unequip existing back to inventory

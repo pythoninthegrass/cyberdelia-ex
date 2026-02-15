@@ -1,5 +1,6 @@
 import contextlib
 import json
+import logging
 import os
 import threading
 from dotenv import load_dotenv
@@ -13,6 +14,12 @@ from game.world import World
 from werkzeug.security import check_password_hash, generate_password_hash
 
 load_dotenv()
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+    level=logging.INFO,
+)
+logger = logging.getLogger('cyberdelia')
 
 app = Flask(__name__, static_folder='web/static', template_folder='web/templates')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mud-secret-key')  # For session management
@@ -33,6 +40,10 @@ socketio = SocketIO(
     async_mode='eventlet',
     cors_allowed_origins='*'
 )
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 # Test route to verify static file serving (must be after app is defined)
 @app.route('/test_cyberpunk_image')
@@ -77,7 +88,7 @@ def _start_regen_loop():
         while True:
             with contextlib.suppress(Exception):
                 if regen_enabled:
-                    for username, player in list(web_players.items()):
+                    for _username, player in list(web_players.items()):
                         # Skip players in combat
                         if _is_in_fight(player):
                             continue
@@ -139,7 +150,7 @@ def _start_mob_loop():
         while True:
             with contextlib.suppress(Exception):
                 world.tick_roaming()
-                for username, player in list(web_players.items()):
+                for _username, player in list(web_players.items()):
                     sid = getattr(player, 'address', None)
                     if sid:
                         socketio.emit('player_info', {
@@ -235,8 +246,10 @@ def register():
         email = request.form.get('email')
         if not username or not password or not email:
             error = 'Username, password, and email required.'
+            logger.warning('register: missing fields for %r', username)
         elif username in accounts:
             error = 'Username already exists.'
+            logger.warning('register: duplicate username %r', username)
         else:
             accounts[username] = {
                 'password': generate_password_hash(password),
@@ -247,6 +260,7 @@ def register():
                 'credits': 100
             }
             save_accounts(accounts)
+            logger.info('register: account created user=%r email=%s', username, email)
             # Send verification email
             try:
                 token = username  # Simple token for demo
@@ -255,9 +269,20 @@ def register():
                 msg.body = f'Click to verify your account: {verify_url}'
                 mail.send(msg)
                 success = 'Account created! Check your email to verify.'
+                logger.info('register: verification email sent to %s', email)
             except Exception as e:
                 error = f'Error sending email: {e}'
+                logger.error('register: email failed for %r: %s', username, e)
     return render_template('register.html', error=error, success=success)
+
+@app.route('/verify_email/<username>')
+def verify_email(username):
+    if username in accounts:
+        accounts[username]['verified'] = True
+        save_accounts(accounts)
+        logger.info('verify_email: user=%r verified', username)
+        return redirect(url_for('login'))
+    return 'Invalid verification link.', 404
 
 # Race/Class selection page
 @app.route('/choose_race_class', methods=['GET', 'POST'])
@@ -562,4 +587,6 @@ if __name__ == '__main__':
     # Start background loops and run the development server
     _start_background_loops_once()
     PORT = int(os.getenv('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=PORT)
+    RELOAD = os.getenv('RELOAD', '').lower() in ('1', 'true', 'yes')
+    logger.info('Cyberdelia listening on http://0.0.0.0:%d (reload=%s)', PORT, RELOAD)
+    socketio.run(app, host='0.0.0.0', port=PORT, use_reloader=RELOAD)
