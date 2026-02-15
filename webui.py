@@ -1,17 +1,16 @@
-from game.races_classes import RACES, CLASSES
-
-from flask import Flask, render_template, session, request, redirect, url_for
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from flask_mail import Mail, Message
-import threading
-from game.player import Player
-from game.world import World
-from game.commands import handle_command
+import contextlib
 import json
 import os
+import threading
 from dotenv import load_dotenv
-from werkzeug.security import generate_password_hash, check_password_hash
-
+from flask import Flask, redirect, render_template, request, session, url_for
+from flask_mail import Mail, Message
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from game.commands import handle_command
+from game.player import Player
+from game.races_classes import CLASSES, RACES
+from game.world import World
+from werkzeug.security import check_password_hash, generate_password_hash
 
 load_dotenv()
 
@@ -45,7 +44,7 @@ ACCOUNTS_FILE = os.path.join('data', 'accounts.json')
 def load_accounts():
     if not os.path.exists(ACCOUNTS_FILE):
         return {}
-    with open(ACCOUNTS_FILE, 'r') as f:
+    with open(ACCOUNTS_FILE) as f:
         return json.load(f)
 
 def save_accounts(accounts):
@@ -76,7 +75,7 @@ def _start_regen_loop():
         import time
         rate = 100.0 / 60.0  # ~1.67 per second
         while True:
-            try:
+            with contextlib.suppress(Exception):
                 if regen_enabled:
                     for username, player in list(web_players.items()):
                         # Skip players in combat
@@ -129,10 +128,7 @@ def _start_regen_loop():
                                 },
                                 'regen_enabled': (regen_enabled and not _is_in_fight(player))
                             }, room=sid)
-                time.sleep(1)
-            except Exception:
-                # Avoid crashing the loop; sleep briefly
-                time.sleep(1)
+            time.sleep(1)
     t = threading.Thread(target=loop, daemon=True)
     t.start()
 
@@ -141,7 +137,7 @@ def _start_mob_loop():
     import time
     def loop():
         while True:
-            try:
+            with contextlib.suppress(Exception):
                 world.tick_roaming()
                 for username, player in list(web_players.items()):
                     sid = getattr(player, 'address', None)
@@ -183,9 +179,7 @@ def _start_mob_loop():
                             },
                             'regen_enabled': (regen_enabled and not _is_in_fight(player))
                         }, room=sid)
-                time.sleep(3)
-            except Exception:
-                time.sleep(3)
+            time.sleep(3)
     t = threading.Thread(target=loop, daemon=True)
     t.start()
 
@@ -319,7 +313,7 @@ def logout():
     username = session.get('username')
     if username and username in web_players and username in accounts:
         player = web_players.get(username)
-        try:
+        with contextlib.suppress(Exception):
             accounts[username]['equipment'] = dict(getattr(player, 'equipment', {}))
             accounts[username]['xp'] = getattr(player, 'xp', accounts[username].get('xp', 0))
             accounts[username]['level'] = getattr(player, 'level', accounts[username].get('level', 1))
@@ -330,8 +324,6 @@ def logout():
             for attr in ('hp', 'energy', 'endurance', 'willpower'):
                 accounts[username][attr] = int(getattr(player, attr, accounts[username].get(attr, 100)))
             save_accounts(accounts)
-        except Exception:
-            pass
     session.pop('username', None)
     return redirect(url_for('login'))
 
@@ -354,50 +346,34 @@ def handle_connect():
     player.char_class = acc.get('char_class')
     # Restore persisted equipment if available
     if isinstance(acc.get('equipment'), dict):
-        try:
+        with contextlib.suppress(Exception):
             player.equipment.update(acc.get('equipment'))
-        except Exception:
-            pass
     # Restore persisted progression if available
     if 'level' in acc:
-        try:
+        with contextlib.suppress(Exception):
             player.level = int(acc.get('level', player.level))
-        except Exception:
-            pass
     if 'xp' in acc:
-        try:
+        with contextlib.suppress(Exception):
             player.xp = int(acc.get('xp', player.xp))
-        except Exception:
-            pass
     # Restore credits if available
-    try:
+    with contextlib.suppress(Exception):
         player.credits = int(acc.get('credits', getattr(player, 'credits', 100)))
-    except Exception:
-        pass
     if 'xp_max' in acc:
-        try:
+        with contextlib.suppress(Exception):
             player.xp_max = int(acc.get('xp_max', player.xp_max))
-        except Exception:
-            pass
     # Restore inventory if available
     if isinstance(acc.get('inventory'), list):
-        try:
+        with contextlib.suppress(Exception):
             player.inventory = list(acc.get('inventory'))
-        except Exception:
-            pass
     # Restore last location if available
     if isinstance(acc.get('current_room'), str) and acc.get('current_room') in world.rooms:
-        try:
+        with contextlib.suppress(Exception):
             player.current_room = acc.get('current_room')
-        except Exception:
-            pass
     # Restore core stats if available
     for attr in ('hp', 'energy', 'endurance', 'willpower'):
         if attr in acc:
-            try:
+            with contextlib.suppress(Exception):
                 setattr(player, attr, int(acc.get(attr)))
-            except Exception:
-                pass
     web_players[username] = player
     welcome = world.describe_room(player.current_room)
     emit('message', {'data': f'Welcome {username}!\n{welcome}'})
@@ -579,12 +555,11 @@ def handle_command_event(data):
         accounts[username]['current_room'] = getattr(player, 'current_room', accounts[username].get('current_room', world.start_room))
         for attr in ('hp', 'energy', 'endurance', 'willpower'):
             accounts[username][attr] = int(getattr(player, attr, accounts[username].get(attr, 100)))
-        try:
+        with contextlib.suppress(Exception):
             save_accounts(accounts)
-        except Exception:
-            pass
 
 if __name__ == '__main__':
     # Start background loops and run the development server
     _start_background_loops_once()
-    socketio.run(app, host='0.0.0.0', port=5000)
+    PORT = int(os.getenv('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=PORT)
